@@ -39,24 +39,67 @@ from torchvision import transforms, datasets, models
 from einops import rearrange
 from tqdm.auto import trange
 
+import torch
+from torchvision import transforms
+
+import torchvision.datasets as datasets
+# Using CIFAR-10 dataset
+from torchvision.datasets import CIFAR10
+from torch.utils.data import DataLoader
+
+from torchvision import models
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+from einops import rearrange
+
+from tqdm.notebook import tqdm, trange
+import os
+from torchvision.datasets import ImageFolder
+import tarfile
+
 # -----------------------------------------------------------------------------#
 #                                 Data stuff                                   #
 # -----------------------------------------------------------------------------#
 def get_loaders(batch_size: int = 512):
     """Return CIFAR‑10 train and test DataLoaders."""
-    transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-    ])
-    train_ds = datasets.CIFAR10(root='./data', train=True, download=True,
-                                transform=transform)
-    test_ds  = datasets.CIFAR10(root='./data', train=False, download=True,
-                                transform=transform)
 
-    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,
-                              num_workers=4, pin_memory=True)
-    test_loader  = DataLoader(test_ds,  batch_size=batch_size, shuffle=False,
-                              num_workers=4, pin_memory=True)
+    # Define the transformations
+    transform = transforms.Compose([
+        transforms.Resize(160),               # resize to 160×160 for imagenette2-160
+        transforms.CenterCrop(160),
+        transforms.ToTensor(),
+        transforms.Normalize((0.5, 0.5, 0.5),
+                            (0.5, 0.5, 0.5)),
+    ])
+    # Paths for the Imagenette dataset (assumes you want it under ./data/imagenette2-160/)
+    imagenette_root = "./data/imagenette2-160"
+    train_dir = os.path.join(imagenette_root, "train")
+    val_dir   = os.path.join(imagenette_root, "val")
+
+    # download & extract if not already present
+    if not os.path.isdir(imagenette_root):
+        os.makedirs(os.path.dirname(imagenette_root), exist_ok=True)
+        url = "https://s3.amazonaws.com/fast-ai-imageclas/imagenette2-160.tgz"
+        archive_path = os.path.join(os.path.dirname(imagenette_root), "imagenette2-160.tgz")
+        if not os.path.exists(archive_path):
+            print("Downloading Imagenette dataset...")
+            import urllib.request
+            urllib.request.urlretrieve(url, archive_path)
+        print("Extracting Imagenette dataset...")
+        with tarfile.open(archive_path, "r:gz") as tar:
+            tar.extractall(path=os.path.dirname(imagenette_root))
+        print("Done.")
+
+    # Load the Imagenette dataset
+    train_dataset = ImageFolder(train_dir, transform=transform)
+    test_dataset  = ImageFolder(val_dir,   transform=transform)
+
+    # Create data loaders
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    test_loader  = DataLoader(test_dataset,  batch_size=batch_size, shuffle=False)
+
     return train_loader, test_loader
 
 # -----------------------------------------------------------------------------#
@@ -94,7 +137,7 @@ def linear_probe_multi(model: nn.Module,
                        n_epoch: int = 30,
                        device: torch.device = torch.device('cpu')) -> np.ndarray:
     """Return accuracy (shape = (100,)) across the 100 binary tasks."""
-    feat_dim, n_tasks = 512, 100
+    feat_dim, n_tasks = 2048, 256
     model.eval().to(device)
 
     head = nn.Linear(feat_dim, n_tasks).to(device)
@@ -104,10 +147,7 @@ def linear_probe_multi(model: nn.Module,
     for epoch in trange(n_epoch, desc='[probe]', leave=False):
         runloss = 0.
         for imgs, lbls in loader:
-            imgs = torch.nn.functional.interpolate(imgs, size=(224, 224),
-                                                   mode='bilinear',
-                                                   align_corners=False
-                                                  ).to(device, non_blocking=True)
+            imgs = imgs.to(device, non_blocking=True)
             lbls = lbls.to(device, non_blocking=True)
 
             logits = head(model(imgs))
@@ -123,10 +163,7 @@ def linear_probe_multi(model: nn.Module,
     head.eval()
     with torch.no_grad():
         for imgs, lbls in loader:
-            imgs = torch.nn.functional.interpolate(imgs, size=(224, 224),
-                                                   mode='bilinear',
-                                                   align_corners=False
-                                                  ).to(device, non_blocking=True)
+            imgs = imgs.to(device, non_blocking=True)
             lbls = lbls.to(device, non_blocking=True)
 
             preds = (head(model(imgs)) > 0).float()
@@ -149,10 +186,10 @@ def train_and_evaluate(beta: float,
                       ) -> np.ndarray:
     """Fine‑tune and return per‑task accuracies (length=100)."""
     # Fresh backbones for every run
-    model        = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
+    model        = models.resnet50(pretrained  = True)
     model.fc     = nn.Identity()
 
-    frozen_model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
+    frozen_model = models.resnet50(pretrained  = True)
     frozen_model.fc = nn.Identity()
     frozen_model.eval()
 
@@ -165,10 +202,7 @@ def train_and_evaluate(beta: float,
         run_loss = run_exp = run_var = 0.0
         n_batches = 0
         for images, _ in train_loader:
-            images = torch.nn.functional.interpolate(images, size=(224, 224),
-                                                     mode='bilinear',
-                                                     align_corners=False
-                                                    ).to(device, non_blocking=True)
+            images = images.to(device, non_blocking=True)
 
             # ── similarity matrices K (frozen) and M (trainable) ──
             with torch.no_grad():
@@ -214,13 +248,13 @@ def train_and_evaluate(beta: float,
 # -----------------------------------------------------------------------------#
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--betas', default='2.0,4.0,8.0,16.0,32.0',
+    ap.add_argument('--betas', default='2.0,2.0,2.0,2.2,2.2,2.2,2.4,2.4,2.4,2.6,2.6,2.6,2.8,2.8,2.8,3.0,3.0,3.0,3.2,3.2,3.2,,3.4,3.4,3.4',
                     help='comma‑separated list of β values')
     ap.add_argument('--Ts',    default='1.0',
                     help='comma‑separated list of temperature T values')
     ap.add_argument('--epochs', type=int, default=30,
                     help='training epochs for each (β,T) run')
-    ap.add_argument('--output', default='grid_search_results_beta_list.json',
+    ap.add_argument('--output', default='grid_search_results_beta_list4.json',
                     help='where to store the JSON results')
     ap.add_argument('--batch_size', type=int, default=512,
                     help='batch size for CIFAR‑10 training and evaluation')
@@ -236,11 +270,11 @@ def main():
     train_loader, test_loader = get_loaders(batch_size=args.batch_size)
 
     # ── load the 100‑task label list ─────────────────────────────────────────
-    if not os.path.exists('labels_list_new_algo_1.npy'):
+    if not os.path.exists('labels_list_imagenette_1.npy'):
         raise FileNotFoundError(
-            'labels_list_new_algo_1.npy not found – please place it next to '
+            'labels_list_imagenette_1.npy not found – please place it next to '
             'this script or pass the correct path.')
-    labels_list = np.load('labels_list_new_algo_1.npy', allow_pickle=True)
+    labels_list = np.load('labels_list_imagenette_1.npy', allow_pickle=True)
 
     results: List[Dict] = []
     for beta in betas:
