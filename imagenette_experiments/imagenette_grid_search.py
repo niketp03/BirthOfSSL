@@ -131,48 +131,59 @@ class MultiTaskWrapper(torch.utils.data.Dataset):
         lbl_vector = self.all_lbls[:, idx]    # (100,)
         return img, lbl_vector
 
+def linear_probe_multi(model, loader, feat_dim = 2048, n_epoch=1):
+    n_tasks = 256
+    model.eval().cuda()
 
-def linear_probe_multi(model: nn.Module,
-                       loader: DataLoader,
-                       n_epoch: int = 30,
-                       device: torch.device = torch.device('cpu')) -> np.ndarray:
-    """Return accuracy (shape = (100,)) across the 100 binary tasks."""
-    feat_dim, n_tasks = 2048, 256
-    model.eval().to(device)
+    head = torch.nn.Linear(feat_dim, n_tasks).cuda()
+    crit = torch.nn.BCEWithLogitsLoss()
+    opt = torch.optim.Adam(head.parameters(), lr=1e-2)
+    
+    # Add cosine annealing scheduler
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        opt,
+        T_max=n_epoch,  # Total number of epochs
+        eta_min=1e-6    # Minimum learning rate
+    )
 
-    head = nn.Linear(feat_dim, n_tasks).to(device)
-    criterion = nn.BCEWithLogitsLoss()
-    optim = torch.optim.Adam(head.parameters(), lr=1e-2)
-
-    for epoch in trange(n_epoch, desc='[probe]', leave=False):
+    for epoch in trange(n_epoch):
         runloss = 0.
-        for imgs, lbls in loader:
-            imgs = imgs.to(device, non_blocking=True)
-            lbls = lbls.to(device, non_blocking=True)
+        for imgs, lbls in loader:                  # lbls → (B, 100)
+            imgs = torch.nn.functional.interpolate(
+                imgs, size=(224,224), mode='bilinear', align_corners=False
+            ).cuda(non_blocking=True)
+            lbls = lbls.cuda(non_blocking=True)
 
-            logits = head(model(imgs))
-            loss = criterion(logits, lbls)
-            optim.zero_grad()
+            opt.zero_grad(set_to_none=True)
+            with torch.cuda.amp.autocast():        # mixed precision, optional
+                feats = model(imgs)                # (B, 1000)
+                logits = head(feats)               # (B, n_tasks)
+                loss = crit(logits, lbls)
             loss.backward()
-            optim.step()
+            opt.step()
             runloss += loss.item()
 
-    # ── evaluation ──
-    correct = torch.zeros(n_tasks, device=device)
-    total   = 0
-    head.eval()
+        # Step the scheduler after each epoch
+        scheduler.step()
+        current_lr = scheduler.get_last_lr()[0]
+
+    # ─ Evaluation per task ─
+    correct = torch.zeros(n_tasks, device='cuda')
+    total   = torch.zeros(n_tasks, device='cuda')
+
     with torch.no_grad():
         for imgs, lbls in loader:
-            imgs = imgs.to(device, non_blocking=True)
-            lbls = lbls.to(device, non_blocking=True)
+            imgs  = torch.nn.functional.interpolate(
+                        imgs, size=(224,224), mode='bilinear', align_corners=False
+                    ).cuda(non_blocking=True)
+            lbls  = lbls.cuda(non_blocking=True)
 
-            preds = (head(model(imgs)) > 0).float()
+            preds   = (head(model(imgs)) > 0).float()
             correct += (preds == lbls).sum(dim=0)
             total   += lbls.size(0)
 
-    acc = (100 * correct / total).cpu().numpy()   # (100,)
+    acc = (100*correct/total).cpu().numpy()        # shape (100,)
     return acc
-
 # -----------------------------------------------------------------------------#
 #                              Training routine                                #
 # -----------------------------------------------------------------------------#
@@ -197,6 +208,13 @@ def train_and_evaluate(beta: float,
     frozen_model.to(device)
 
     optimiser = torch.optim.Adam(model.parameters(), lr=1e-3)
+    
+    # Add cosine annealing scheduler
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimiser,
+        T_max=n_epoch,  # Total number of epochs
+        eta_min=1e-6    # Minimum learning rate
+    )
 
     for epoch in trange(n_epoch, desc=f'[train β={beta},T={T}]', leave=False):
         run_loss = run_exp = run_var = 0.0
@@ -226,11 +244,16 @@ def train_and_evaluate(beta: float,
             run_var  += var.item()
             n_batches += 1
 
+        # Step the scheduler after each epoch
+        scheduler.step()
+        current_lr = scheduler.get_last_lr()[0]
+
         if n_batches:
-            print(f'Epoch {epoch+1:02d}: '
-                  f'loss {run_loss/n_batches:8.4f}, '
-                  f'E {run_exp/n_batches:8.4f}, '
-                  f'Var {run_var/n_batches:8.4f}')
+            print(f'Epoch {epoch+1:02d}: '
+                  f'loss {run_loss/n_batches:8.4f}, '
+                  f'E {run_exp/n_batches:8.4f}, '
+                  f'Var {run_var/n_batches:8.4f}, '
+                  f'lr {current_lr:.2e}')
 
     # ── Linear‑probe evaluation on 100 tasks ─────────────────────────────────
     labels_matrix = torch.from_numpy(np.stack(labels_list)).float()
@@ -238,23 +261,21 @@ def train_and_evaluate(beta: float,
     multi_loader  = DataLoader(multi_ds, batch_size=test_loader.batch_size,
                                shuffle=False, num_workers=4, pin_memory=True)
 
-    task_acc = linear_probe_multi(model, multi_loader, n_epoch=30,
-                                  device=device)
+    task_acc = linear_probe_multi(model, multi_loader, n_epoch=30)
     return task_acc
-
 
 # -----------------------------------------------------------------------------#
 #                                 Main entry                                   #
 # -----------------------------------------------------------------------------#
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--betas', default='2.0,2.0,2.0,2.2,2.2,2.2,2.4,2.4,2.4,2.6,2.6,2.6,2.8,2.8,2.8,3.0,3.0,3.0,3.2,3.2,3.2,,3.4,3.4,3.4',
+    ap.add_argument('--betas', default='1.8,1.8,1.8,1.8,2.0,2.0,2.0,2.0,2.2,2.2,2.2,2.2,2.4,2.4,2.4,2.4,2.6,2.6,2.6,2.6,2.8,2.8,2.8,2.8,3.0,3.0,3.0,3.0',
                     help='comma‑separated list of β values')
     ap.add_argument('--Ts',    default='1.0',
                     help='comma‑separated list of temperature T values')
     ap.add_argument('--epochs', type=int, default=30,
                     help='training epochs for each (β,T) run')
-    ap.add_argument('--output', default='grid_search_results_beta_list4.json',
+    ap.add_argument('--output', default='grid_search_results_beta_list_new_LR3.json',
                     help='where to store the JSON results')
     ap.add_argument('--batch_size', type=int, default=512,
                     help='batch size for CIFAR‑10 training and evaluation')
