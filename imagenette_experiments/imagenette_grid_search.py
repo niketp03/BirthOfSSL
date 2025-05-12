@@ -269,13 +269,13 @@ def train_and_evaluate(beta: float,
 # -----------------------------------------------------------------------------#
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--betas', default='1.8,1.8,1.8,1.8,2.0,2.0,2.0,2.0,2.2,2.2,2.2,2.2,2.4,2.4,2.4,2.4,2.6,2.6,2.6,2.6,2.8,2.8,2.8,2.8,3.0,3.0,3.0,3.0',
+    ap.add_argument('--betas', default='1.8,2.0,2.2,2.4,2.6,2.8,3.0',
                     help='comma‑separated list of β values')
     ap.add_argument('--Ts',    default='1.0',
                     help='comma‑separated list of temperature T values')
-    ap.add_argument('--epochs', type=int, default=30,
+    ap.add_argument('--epochs', type=int, default=100,
                     help='training epochs for each (β,T) run')
-    ap.add_argument('--output', default='grid_search_results_beta_list_new_LR3.json',
+    ap.add_argument('--output', default='grid_search_results_beta_list_longer_training.json',
                     help='where to store the JSON results')
     ap.add_argument('--batch_size', type=int, default=512,
                     help='batch size for CIFAR‑10 training and evaluation')
