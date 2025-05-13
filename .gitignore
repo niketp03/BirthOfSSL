@@ -2,3 +2,4 @@
 /imagenette_experiments/data
 *.pt
 *.pth
+*.npy
