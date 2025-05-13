@@ -1,3 +1,4 @@
 /data
 /imagenette_experiments/data
 *.pt
+*.pth
