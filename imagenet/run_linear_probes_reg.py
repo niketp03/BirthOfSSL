@@ -150,11 +150,11 @@ def extract_features_from_kernel(kernel_matrix):
 # -----------------------------------------------------------------------------#
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--tasks_file', default='labels_mini_imagenet_swin_base_patch4_window7_224.npy',
+    ap.add_argument('--tasks_file', default='labels_mini_imagenet_efficientnet_b5.npy',
                     help='file containing pre-generated task labels')
-    ap.add_argument('--kernels_dir', default='kernels_out_all_cnns',
+    ap.add_argument('--kernels_dir', default='kernels_out',
                     help='directory containing kernel files (K_*.pt)')
-    ap.add_argument('--output', default='kernel_evaluation_results_all_cnns_reg.json',
+    ap.add_argument('--output', default='kernel_evaluation_results_all_models_huge.json',
                     help='where to store the JSON results')
     ap.add_argument('--batch_size', type=int, default=256,
                     help='batch size for evaluation')

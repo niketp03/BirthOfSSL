@@ -3,3 +3,8 @@
 *.pt
 *.pth
 *.npy
+imagenet/*.pdf
+imagenette_experiments/*.pdf
+*.json
+/code_for_submission
+*.npy

@@ -11,7 +11,7 @@ values.  For every (beta, T) pair it:
 2.  Fine‑tunes the backbone for `--epochs` epochs with the contrastive‑style
     loss used in the original notebook:
 
-        loss = β · Var(M, σ(K/T)) – E(M, σ(K/T))
+        loss = β · Var(M, σ(K/T)) – E(M, σ(K/T))
 
     where K is the batch–similarity matrix from the frozen model and M is the
     batch–similarity matrix from the trainable model (see
@@ -138,13 +138,6 @@ def linear_probe_multi(model, loader, feat_dim = 2048, n_epoch=1):
     head = torch.nn.Linear(feat_dim, n_tasks).cuda()
     crit = torch.nn.BCEWithLogitsLoss()
     opt = torch.optim.Adam(head.parameters(), lr=1e-2)
-    
-    # Add cosine annealing scheduler
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-        opt,
-        T_max=n_epoch,  # Total number of epochs
-        eta_min=1e-6    # Minimum learning rate
-    )
 
     for epoch in trange(n_epoch):
         runloss = 0.
@@ -162,10 +155,6 @@ def linear_probe_multi(model, loader, feat_dim = 2048, n_epoch=1):
             loss.backward()
             opt.step()
             runloss += loss.item()
-
-        # Step the scheduler after each epoch
-        scheduler.step()
-        current_lr = scheduler.get_last_lr()[0]
 
     # ─ Evaluation per task ─
     correct = torch.zeros(n_tasks, device='cuda')
@@ -208,13 +197,6 @@ def train_and_evaluate(beta: float,
     frozen_model.to(device)
 
     optimiser = torch.optim.Adam(model.parameters(), lr=1e-3)
-    
-    # Add cosine annealing scheduler
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-        optimiser,
-        T_max=n_epoch,  # Total number of epochs
-        eta_min=1e-6    # Minimum learning rate
-    )
 
     for epoch in trange(n_epoch, desc=f'[train β={beta},T={T}]', leave=False):
         run_loss = run_exp = run_var = 0.0
@@ -244,16 +226,11 @@ def train_and_evaluate(beta: float,
             run_var  += var.item()
             n_batches += 1
 
-        # Step the scheduler after each epoch
-        scheduler.step()
-        current_lr = scheduler.get_last_lr()[0]
-
         if n_batches:
             print(f'Epoch {epoch+1:02d}: '
                   f'loss {run_loss/n_batches:8.4f}, '
                   f'E {run_exp/n_batches:8.4f}, '
-                  f'Var {run_var/n_batches:8.4f}, '
-                  f'lr {current_lr:.2e}')
+                  f'Var {run_var/n_batches:8.4f}')
 
     # ── Linear‑probe evaluation on 100 tasks ─────────────────────────────────
     labels_matrix = torch.from_numpy(np.stack(labels_list)).float()
@@ -269,13 +246,13 @@ def train_and_evaluate(beta: float,
 # -----------------------------------------------------------------------------#
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--betas', default='1.8,2.0,2.2,2.4,2.6,2.8,3.0',
+    ap.add_argument('--betas', default='2.0,2.2,2.4,2.6,2.8,3.0',
                     help='comma‑separated list of β values')
     ap.add_argument('--Ts',    default='1.0',
                     help='comma‑separated list of temperature T values')
-    ap.add_argument('--epochs', type=int, default=100,
+    ap.add_argument('--epochs', type=int, default=30,
                     help='training epochs for each (β,T) run')
-    ap.add_argument('--output', default='grid_search_results_beta_list_longer_training.json',
+    ap.add_argument('--output', default='grid_search_results_beta_list.json',
                     help='where to store the JSON results')
     ap.add_argument('--batch_size', type=int, default=512,
                     help='batch size for CIFAR‑10 training and evaluation')
@@ -317,9 +294,9 @@ def main():
             # flush intermediate result in case of interruption
             with open(args.output, 'w') as f:
                 json.dump(results, f, indent=2)
-            print(f'β={beta:4.2f}, T={T:4.2f} → '
-                  f'mean acc {acc.mean():5.2f} (100‑task) '
-                  f'in {runtime/60:.1f} min')
+            print(f'β={beta:4.2f}, T={T:4.2f} → '
+                  f'mean acc {acc.mean():5.2f} (100‑task) '
+                  f'in {runtime/60:.1f} min')
 
     print(f'Grid‑search complete. Results saved to: {args.output}')
 

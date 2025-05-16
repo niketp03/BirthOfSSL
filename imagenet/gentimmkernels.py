@@ -31,131 +31,20 @@ NUM_WORKERS = 0
 DEVICE     = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-
-MODEL_NAMES = [
-    # ── Classic CNNs ───────────────────────────────────────────────────────
-    #"resnet18",
-    #"resnet34",
-    #"resnet50",
-    #"resnet101",
-    #"resnet152",
-    #"wide_resnet50_2",
-    #"wide_resnet101_2",
-    #"resnext50_32x4d",
-    #"resnext101_32x8d",
-    #"densenet121",
-    #"densenet201",
-    #"ese_vovnet39b",
-    #"regnety_016",
-    #"regnety_032",
-    # ConvNeXt family
-    #"convnext_small",
-    # EfficientNet & friends
-    #"efficientnet_b0",
-    # Mobile / lightweight
-    #"mobilenetv3_large_100",
-    #"ghostnet_100",
-    # NF‑Nets (DeepMind)
-    #"dm_nfnet_f0",
-    # ── Vision Transformers & hybrids ─────────────────────────────────────
-    # ViT
-    #"vit_base_patch16_224",
-    # DeiT
-    #"deit_tiny_patch16_224",
-    #"deit_small_patch16_224",
-    # BEiT
-    #"beit_base_patch16_224",
-    #"beit_large_patch16_224",
-    # Swin
-    #"swin_tiny_patch4_window7_224",
-    # PVT‑v2
-    #"pvt_v2_b2",
-    # CSWin
-    #"cswin_tiny_224",
-    # CoAtNet
-    #"coatnet_0",
-    # Mixers / Convmixer
-    #"mixer_b16_224",
-    # GC ViT
-    #"gcvit_base",
-    # ConvNeXt‑v2
-    #"convnextv2_base",
-    # CLIP ViT (image branch only)
-    #"clip_vit_base_patch32",
-]
-
-MODEL_NAMES = [
-    # ── Classic CNNs ───────────────────────────────────────────────────────
-    "resnet18",
-    "resnet34",
-    "resnet50",
-    "resnet101",
-    "resnet152",
-    "wide_resnet50_2",
-    "wide_resnet101_2",
-    "resnext50_32x4d",
-    "resnext101_32x8d",
-    "densenet121",
-    "densenet201",
-    "ese_vovnet39b",
-    "regnety_016",
-    "regnety_032"
-]
-
-MODEL_NAMES = [
-    # ─────────────── ResNet family ───────────────
-    "resnet18", "resnet34", "resnet50", "resnet101", "resnet152",
-    "resnet26d", "resnet50d", "resnet50_gn", "resnet200d",
-    "wide_resnet50_2", "wide_resnet101_2",
-    "resnext50_32x4d", "resnext101_32x8d", "bat_resnext26ts",
-    "resnest50d", "resnest101e", "resnest200e", "resnest269e",
-    "seresnet50", "seresnet152", "seresnext50_32x4d",
-    "skresnet50", "skresnext50_32x4d",
-
-    # ─────────────── Dense / DPN / HRNet ─────────
-    "densenet121", "densenet161", "densenet201",
-    "tv_densenet169", "densenet264d_iabn",
-    "dpn68", "dpn92", "dpn131",
-    "hrnet_w18", "hrnet_w30", "hrnet_w48",
-    
-    # ─────────────── EfficientNet & friends ──────
-    "efficientnet_b0", "efficientnet_b2", "efficientnet_b3",
-    "efficientnet_b4", "efficientnet_b5", "efficientnet_b6", "efficientnet_b7",
-    "efficientnet_lite0", "efficientnet_lite4",
-    "efficientnetv2_rw_t", "efficientnetv2_rw_s", "efficientnetv2_rw_b",
-
-    # ─────────────── ConvNeXt & ConvNeXt‑v2 ──────
-    "convnext_tiny", "convnext_small", "convnext_base", "convnext_large",
-    "convnextv2_tiny", "convnextv2_base", "convnextv2_large",
-
-    # ─────────────── RegNet / NF‑Net / VovNet ────
-    "regnetx_002", "regnetx_004", "regnetx_016", "regnetx_064",
-    "regnety_004", "regnety_016", "regnety_032", "regnety_080",
-    "dm_nfnet_f0", "dm_nfnet_f3",
-    "ese_vovnet19b_dw", "ese_vovnet39b", "vovnet99",
-
-    # ─────────────── Mobile / Edge models ────────
-    "mobilenetv2_100", "mobilenetv3_large_100", "mobilenetv3_small_075",
-    "mobilenetv3_rw", "hardnet85",
-    "ghostnet_100", "ghostnetv2_pico", "fbnetv3_b",
-    "mnasnet_100", "spnasnet_100", "efficientnet_es",
-
-    # ─────────────── Inception / Xception ────────
-    "inception_v3", "adv_inception_v3",
-    "inception_v4", "inception_resnet_v2",
-    "inception_next_atto", "inception_next_small",
-    "xception", "xception41",
-    
-    # ─────────────── Misc. specialised CNNs ──────
-    "darknet53", "cspdarknet53", "dla46x12", "ecaresnet50d",
-    "sele_resnext26_32x4d", "gla_resnet26ts",
-    "repvgg_a2", "repvgg_b3g4",
-    "squeezenet1_0", "squeezenet1_1",
-    "vgg11_bn", "vgg16_bn", "vgg19_bn",
-]
+MODEL_NAMES = ['deit_tiny_patch16_224', 'deit_small_patch16_224', 'pvt_v2_b2',
+       'resnet34', 'resnet18', 'beit_base_patch16_224', 'convnext_small',
+       'vit_base_patch16_224', 'mixer_b16_224',
+       'swin_tiny_patch4_window7_224', 'regnety_016',
+       'beit_large_patch16_224', 'gcvit_base', 'convnextv2_base',
+       'ese_vovnet39b', 'densenet121', 'ghostnet_100', 'efficientnet_b0',
+       'mobilenetv3_large_100', 'regnety_032', 'densenet201', 'resnet152',
+       'resnet101', 'wide_resnet50_2', 'resnext50_32x4d',
+       'resnext101_32x8d', 'wide_resnet101_2', 'resnet50', 'dm_nfnet_f0',
+       'deit_base_patch16_224', 'swin_base_patch4_window7_224',
+       'convnext_base', 'efficientnet_b5']
 
 
-OUT_DIR = Path("kernels_out_all_cnns")
+OUT_DIR = Path("kernels_out")
 OUT_DIR.mkdir(exist_ok=True)
 # ───────────────────────────────────────────
 
